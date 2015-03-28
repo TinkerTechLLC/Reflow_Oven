@@ -1,19 +1,12 @@
 /*********************************************************************
-This is an example sketch for our Monochrome Nokia 5110 LCD Displays
+				Solder Reflow Oven Firmware v0.1
 
-  Pick one up today in the adafruit shop!
-  ------> http://www.adafruit.com/products/338
+This firmware handles input from a 5-direction joystick switch, a
+momentary start switch, output of reflow parameters to a Nokia 5110 
+LCD display, and PID control of a toaster oven heating elements for
+solder reflowing. See https://github.com/mploof/Reflow_Oven for more
+details.
 
-These displays use SPI to communicate, 4 or 5 pins are required to
-interface
-
-Adafruit invests time and resources providing this open source code,
-please support Adafruit and open-source hardware by purchasing
-products from Adafruit!
-
-Written by Limor Fried/Ladyada  for Adafruit Industries.
-BSD license, check license.txt for more information
-All text above, and the splash screen must be included in any redistribution
 *********************************************************************/
 
 #include <SPI.h>
@@ -28,16 +21,6 @@ All text above, and the splash screen must be included in any redistribution
 // pin 3 - LCD reset (RST)
 Adafruit_PCD8544 display = Adafruit_PCD8544(7, 6, 5, 4, 3);
 
-// Hardware SPI (faster, but must use certain hardware pins):
-// SCK is LCD serial clock (SCLK) - this is pin 13 on Arduino Uno
-// MOSI is LCD DIN - this is pin 11 on an Arduino Uno
-// pin 5 - Data/Command select (D/C)
-// pin 4 - LCD chip select (CS)
-// pin 3 - LCD reset (RST)
-// Adafruit_PCD8544 display = Adafruit_PCD8544(5, 4, 3);
-// Note with hardware SPI MISO and SS pins aren't used but will still be read
-// and written to during SPI transfer.  Be careful sharing these pins!
-
 #define NUMFLAKES 10
 #define XPOS 0
 #define YPOS 1
@@ -48,32 +31,46 @@ Adafruit_PCD8544 display = Adafruit_PCD8544(7, 6, 5, 4, 3);
 #define LOGO16_GLCD_HEIGHT 16
 #define LOGO16_GLCD_WIDTH  16
 
-// Joystick Directions
+
+/*** Joystick & Button Constants and Vars ***/
+
+#define RELEASED 0
 #define UP 8
 #define DOWN 9
 #define LEFT 10
 #define RIGHT 11
 #define SELECT 12
-#define RELEASED 0
-
+#define BUTTON_PIN 13
 byte joystick_direction = RELEASED;
 byte last_joystick_direction = RELEASED;
+bool position_selected = false;
 
-// Cursor positions
+
+/*** Cursor Constants and Vars ***/
+
+#define ROW_HEIGHT 8
+#define COL_WIDTH 5
+
 #define SOAK_TEMP 0
 #define SOAK_TIME 1
 #define REFLOW_TEMP 2
 #define REFLOW_TIME 3
-const byte MIN_POSITION = SOAK_TEMP;
-const byte MAX_POSITION = REFLOW_TIME; // Make sure to update this if more positions are added
 
-byte cursor_position = SOAK_TEMP;
+const int MIN_POSITION = SOAK_TEMP;
+const int MAX_POSITION = REFLOW_TIME; // Make sure to update this if more positions are added
+int cursor_position = SOAK_TEMP;
 
-// Reflow parameters
-int soak_temp = 160;
-int soak_time = 40;
-int reflow_temp = 215;
-int reflow_time = 55;
+
+/*** Reflow Program Parameters ***/
+
+int soak_temp			= 160;		// Temp in deg C
+int soak_time			= 40;		// Time in seconds
+int reflow_temp			= 215;		// Temp in deg C
+int reflow_time			= 55;		// Time in seconds
+bool program_running	= false;
+
+// Debugging state
+bool debug = true;
 
 static const unsigned char PROGMEM logo16_glcd_bmp[] =
 { B00000000, B11000000,
@@ -95,59 +92,151 @@ static const unsigned char PROGMEM logo16_glcd_bmp[] =
 
 void setup()   {
 
-  Serial.begin(9600);
-  display.begin();
-  // Starrt listen for joystick input
-  attachInterrupt(0, joystickISR, FALLING);
-  // init done
+	// Set pin modes
+	pinMode(2, INPUT);
+	for (byte i = JOYSTICK_START_PIN; i < (JOYSTICK_START_PIN + JOYSTICK_OUTPUTS + 1); i++) {
+		pinMode(i, INPUT);
+	}
+	for (byte i = 3; i <= 7; i++) {
+		pinMode(i, OUTPUT);
+	}
+  
+	// Start serial connection
+	Serial.begin(9600);
 
-  // you can change the contrast around to adapt the display
-  // for the best viewing!
-  display.setContrast(35);
+	// Start LCD display process and set contrast
+	display.begin();
+	display.setContrast(35);
 
-  display.display(); // show splashscreen
-  delay(2000);
-  display.clearDisplay();   // clears the screen and buffer
+	// Show splash screen, wait, then clear screen
+	display.display();
+	delay(500);				
+	display.clearDisplay();   
 
-  // Display temp and time info
-  updateDisplay();
+	// Display initial temp and time info
+	updateDisplay();
+
+	// Listen for start program button
+	attachInterrupt(0, inputISR, RISING);
 
 }
-
 
 void loop() {
 
-	static unsigned long time = millis();
-
-	if (joystick_direction != RELEASED) {
-		joystickHandler();
+	// Until the program starts, just check user input and update the menu
+	if (!program_running){
+		menuUpdate();
+		debugOutput();
 	}
+	// Otherwise start the program
+	else {
 
-	if (millis() - time > 1000){
-		Serial.print("Joystick direction: ");
-		Serial.println(last_joystick_direction);
-		last_joystick_direction = RELEASED;
-		time = millis();
-	}  
+		display.clearDisplay();
+		display.setTextSize(2);
+		display.setCursor(0, 0);
+		display.print("Program");
+		display.println("Running");
+		display.display();
+
+		while (program_running) {
+			programUpdate();
+			debugOutput();
+		}
+
+		updateDisplay();
+	}
 }
 
-void joystickISR() {
+void menuUpdate() {
 
-	//Serial.println("Interrupt detected!");
+	if (joystick_direction != RELEASED) {
+		// Deal with joystick input
+		joystickHandler();
+		// Refresh the display with new info
+		updateDisplay();
+	}
+}
+
+void programUpdate() {
+	delay(10);
+	return;
+}
+
+void debugOutput() {
+
+	// If debug mode is not enabled, don't output info
+	if (!debug)
+		return;
+
+	static unsigned long time = millis();
+
+	if (millis() - time > 1000){
+		if (!program_running){
+			Serial.print("Joystick direction: ");
+			Serial.println(last_joystick_direction);
+			Serial.print("Current position: ");
+			Serial.println(cursor_position);
+			Serial.print("Position selected? ");
+			Serial.println(position_selected);
+			Serial.println("");
+			last_joystick_direction = RELEASED;
+		}
+		else {
+			Serial.println("Progam still running!");
+			Serial.println("");
+		}
+
+		time = millis();
+	}
+}
+
+/*********************************
+
+	 Interrupt Service Routine
+
+**********************************/
+
+void inputISR() {
+
+	static unsigned long last_call = millis();
+
+	// Check the start progam button input. If it's high, flip the program running state
+	if (digitalRead(BUTTON_PIN) == HIGH) {
+		// Button debouncing
+		if (millis() - last_call < 500) {
+			last_call = millis();
+			return;
+		}
+		program_running = !program_running;
+		last_call = millis();
+		return;
+	}
 
 	// Check each of the joystick inputs and determine which direction was pressed
-	for (byte i = JOYSTICK_START_PIN; i < (JOYSTICK_START_PIN + JOYSTICK_OUTPUTS); i++) {
-		if (digitalRead(i) == HIGH){
-			joystick_direction = i;
-			last_joystick_direction = i;
+	if (!program_running) {
+		// Joystick debouncing
+		if (millis() - last_call < 200) {
+			last_call = millis();
 			return;
+		}
+		for (byte i = JOYSTICK_START_PIN; i < (JOYSTICK_START_PIN + JOYSTICK_OUTPUTS); i++) {
+			if (digitalRead(i) == HIGH){
+				joystick_direction = i;
+				last_joystick_direction = i;
+				last_call = millis();
+				return;
+			}
 		}
 	}
 }
 
-void joystickHandler() {
+/*********************************
 
-	static bool position_selected = false;
+		 Menu Functions
+
+**********************************/
+
+void joystickHandler() {	
 
 	switch (joystick_direction) {
 
@@ -167,7 +256,7 @@ void joystickHandler() {
 		// Move the cursor down
 		if (!position_selected){
 			cursor_position++;
-			if (cursor_position < MAX_POSITION)
+			if (cursor_position > MAX_POSITION)
 				cursor_position = MIN_POSITION;
 		}
 		// Decrease the value of the selected parameter
@@ -189,9 +278,6 @@ void joystickHandler() {
 
 	}
 
-	// Refresh the screen with new info
-	updateDisplay();
-	
 	// Return the joystick to released state
 	joystick_direction = RELEASED;
 }
@@ -208,13 +294,13 @@ void updateValues(byte p_input) {
 
 	switch (cursor_position){
 	case SOAK_TEMP:
-		soak_temp += increment;
+		soak_temp += increment*5;
 		break;
 	case SOAK_TIME:
 		soak_time += increment;
 		break;
 	case REFLOW_TEMP:
-		reflow_temp += increment;
+		reflow_temp += increment*5;
 		break;
 	case REFLOW_TIME:
 		reflow_time += increment;
@@ -223,188 +309,39 @@ void updateValues(byte p_input) {
 }
 
 void updateDisplay() {
+	
+	const int CURSOR_OFFSET = 2;
 
-	// Print system parameters first
+	display.clearDisplay();
+
+	// Set system parameters first
 	display.setTextColor(BLACK);
 	display.setCursor(0, 0);
 	display.setTextSize(1);
-	display.print(" Soak Te: ");
-	display.println(soak_temp);
-	display.print(" Soak Ti: ");
-	display.println(soak_time);
-	display.print(" RF Te: ");
-	display.println(reflow_temp);
-	display.print(" RF Ti: ");
-	display.println(reflow_time);
+	display.println("Cooking Params");
+	display.print(" S Temp: ");
+	display.print(soak_temp);
+	display.println("C");
+	display.print(" S Time: ");
+	display.print(soak_time);
+	display.println("s");
+	display.print(" R Temp: ");
+	display.print(reflow_temp);
+	display.println("C");
+	display.print(" R Time: ");
+	display.print(reflow_time);
+	display.println("s");
 	
-	// Then update the cursor position
-	display.setCursor(0, cursor_position);
-	display.print("*");
+	// Then update the cursor position	
+	if (position_selected) {
+		display.setCursor(9 * COL_WIDTH, (cursor_position + CURSOR_OFFSET) * ROW_HEIGHT);
+		display.print("=");
+	}
+	else {
+		display.setCursor(0, (cursor_position + CURSOR_OFFSET) * ROW_HEIGHT);
+		display.print("*");
+	}
+
+	// Display the updated screen
 	display.display();
-}
-
-
-
-
-void testdrawbitmap(const uint8_t *bitmap, uint8_t w, uint8_t h) {
-  uint8_t icons[NUMFLAKES][3];
-  randomSeed(500);     // whatever seed
- 
-  // initialize
-  for (uint8_t f=0; f< NUMFLAKES; f++) {
-    icons[f][XPOS] = random(display.width());
-    icons[f][YPOS] = 0;
-    icons[f][DELTAY] = random(5) + 1;
-    
-    Serial.print("x: ");
-    Serial.print(icons[f][XPOS], DEC);
-    Serial.print(" y: ");
-    Serial.print(icons[f][YPOS], DEC);
-    Serial.print(" dy: ");
-    Serial.println(icons[f][DELTAY], DEC);
-  }
-
-  while (1) {
-    // draw each icon
-    for (uint8_t f=0; f< NUMFLAKES; f++) {
-      display.drawBitmap(icons[f][XPOS], icons[f][YPOS], logo16_glcd_bmp, w, h, BLACK);
-    }
-    display.display();
-    delay(200);
-    
-    // then erase it + move it
-    for (uint8_t f=0; f< NUMFLAKES; f++) {
-      display.drawBitmap(icons[f][XPOS], icons[f][YPOS],  logo16_glcd_bmp, w, h, WHITE);
-      // move it
-      icons[f][YPOS] += icons[f][DELTAY];
-      // if its gone, reinit
-      if (icons[f][YPOS] > display.height()) {
-	icons[f][XPOS] = random(display.width());
-	icons[f][YPOS] = 0;
-	icons[f][DELTAY] = random(5) + 1;
-      }
-    }
-   }
-}
-
-
-void testdrawchar(void) {
-  display.setTextSize(1);
-  display.setTextColor(BLACK);
-  display.setCursor(0,0);
-
-  for (uint8_t i=0; i < 168; i++) {
-    if (i == '\n') continue;
-    display.write(i);
-    //if ((i > 0) && (i % 14 == 0))
-      //display.println();
-  }    
-  display.display();
-}
-
-void testdrawcircle(void) {
-  for (int16_t i=0; i<display.height(); i+=2) {
-    display.drawCircle(display.width()/2, display.height()/2, i, BLACK);
-    display.display();
-  }
-}
-
-void testfillrect(void) {
-  uint8_t color = 1;
-  for (int16_t i=0; i<display.height()/2; i+=3) {
-    // alternate colors
-    display.fillRect(i, i, display.width()-i*2, display.height()-i*2, color%2);
-    display.display();
-    color++;
-  }
-}
-
-void testdrawtriangle(void) {
-  for (int16_t i=0; i<min(display.width(),display.height())/2; i+=5) {
-    display.drawTriangle(display.width()/2, display.height()/2-i,
-                     display.width()/2-i, display.height()/2+i,
-                     display.width()/2+i, display.height()/2+i, BLACK);
-    display.display();
-  }
-}
-
-void testfilltriangle(void) {
-  uint8_t color = BLACK;
-  for (int16_t i=min(display.width(),display.height())/2; i>0; i-=5) {
-    display.fillTriangle(display.width()/2, display.height()/2-i,
-                     display.width()/2-i, display.height()/2+i,
-                     display.width()/2+i, display.height()/2+i, color);
-    if (color == WHITE) color = BLACK;
-    else color = WHITE;
-    display.display();
-  }
-}
-
-void testdrawroundrect(void) {
-  for (int16_t i=0; i<display.height()/2-2; i+=2) {
-    display.drawRoundRect(i, i, display.width()-2*i, display.height()-2*i, display.height()/4, BLACK);
-    display.display();
-  }
-}
-
-void testfillroundrect(void) {
-  uint8_t color = BLACK;
-  for (int16_t i=0; i<display.height()/2-2; i+=2) {
-    display.fillRoundRect(i, i, display.width()-2*i, display.height()-2*i, display.height()/4, color);
-    if (color == WHITE) color = BLACK;
-    else color = WHITE;
-    display.display();
-  }
-}
-   
-void testdrawrect(void) {
-  for (int16_t i=0; i<display.height()/2; i+=2) {
-    display.drawRect(i, i, display.width()-2*i, display.height()-2*i, BLACK);
-    display.display();
-  }
-}
-
-void testdrawline() {  
-  for (int16_t i=0; i<display.width(); i+=4) {
-    display.drawLine(0, 0, i, display.height()-1, BLACK);
-    display.display();
-  }
-  for (int16_t i=0; i<display.height(); i+=4) {
-    display.drawLine(0, 0, display.width()-1, i, BLACK);
-    display.display();
-  }
-  delay(250);
-  
-  display.clearDisplay();
-  for (int16_t i=0; i<display.width(); i+=4) {
-    display.drawLine(0, display.height()-1, i, 0, BLACK);
-    display.display();
-  }
-  for (int8_t i=display.height()-1; i>=0; i-=4) {
-    display.drawLine(0, display.height()-1, display.width()-1, i, BLACK);
-    display.display();
-  }
-  delay(250);
-  
-  display.clearDisplay();
-  for (int16_t i=display.width()-1; i>=0; i-=4) {
-    display.drawLine(display.width()-1, display.height()-1, i, 0, BLACK);
-    display.display();
-  }
-  for (int16_t i=display.height()-1; i>=0; i-=4) {
-    display.drawLine(display.width()-1, display.height()-1, 0, i, BLACK);
-    display.display();
-  }
-  delay(250);
-
-  display.clearDisplay();
-  for (int16_t i=0; i<display.height(); i+=4) {
-    display.drawLine(display.width()-1, 0, 0, i, BLACK);
-    display.display();
-  }
-  for (int16_t i=0; i<display.width(); i+=4) {
-    display.drawLine(display.width()-1, 0, i, display.height()-1, BLACK); 
-    display.display();
-  }
-  delay(250);
 }
