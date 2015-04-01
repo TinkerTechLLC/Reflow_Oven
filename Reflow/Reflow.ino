@@ -9,22 +9,9 @@ details.
 
 *********************************************************************/
 
-#include <SPI.h>
-#include <Adafruit_GFX.h>
-#include <Adafruit_PCD8544.h>
 
-// Software SPI (slower updates, more flexible pin options):
-// pin 7 - Serial clock out (SCLK)
-// pin 6 - Serial data out (DIN)
-// pin 5 - Data/Command select (D/C)
-// pin 4 - LCD chip select (CS)
-// pin 3 - LCD reset (RST)
-Adafruit_PCD8544 display = Adafruit_PCD8544(7, 6, 5, 4, 3);
+#include "menu.h"
 
-#define NUMFLAKES 10
-#define XPOS 0
-#define YPOS 1
-#define DELTAY 2
 #define JOYSTICK_OUTPUTS 5
 #define JOYSTICK_START_PIN 8
 
@@ -43,54 +30,49 @@ Adafruit_PCD8544 display = Adafruit_PCD8544(7, 6, 5, 4, 3);
 #define BUTTON_PIN 13
 byte joystick_direction = RELEASED;
 byte last_joystick_direction = RELEASED;
-bool position_selected = false;
-
-
-/*** Cursor Constants and Vars ***/
-
-#define ROW_HEIGHT 8
-#define COL_WIDTH 5
-
-#define SOAK_TEMP 0
-#define SOAK_TIME 1
-#define REFLOW_TEMP 2
-#define REFLOW_TIME 3
-
-const int MIN_POSITION = SOAK_TEMP;
-const int MAX_POSITION = REFLOW_TIME; // Make sure to update this if more positions are added
-int cursor_position = SOAK_TEMP;
-
-
-/*** Reflow Program Parameters ***/
-
-int soak_temp			= 160;		// Temp in deg C
-int soak_time			= 40;		// Time in seconds
-int reflow_temp			= 215;		// Temp in deg C
-int reflow_time			= 55;		// Time in seconds
-bool program_running	= false;
 
 // Debugging state
 bool debug = true;
 
-static const unsigned char PROGMEM logo16_glcd_bmp[] =
-{ B00000000, B11000000,
-  B00000001, B11000000,
-  B00000001, B11000000,
-  B00000011, B11100000,
-  B11110011, B11100000,
-  B11111110, B11111000,
-  B01111110, B11111111,
-  B00110011, B10011111,
-  B00011111, B11111100,
-  B00001101, B01110000,
-  B00011011, B10100000,
-  B00111111, B11100000,
-  B00111111, B11110000,
-  B01111100, B11110000,
-  B01110000, B01110000,
-  B00000000, B00110000 };
+// Create menu object
+Menu menu;
+
+/*** Reflow Program Parameters ***/
+
+int soak1_temp = 160;		// Temp in deg C
+int soak1_time = 40;		// Time in seconds
+int soak2_temp = 160;		// Temp in deg C
+int soak2_time = 40;		// Time in seconds
+int reflow_temp = 215;		// Temp in deg C
+int reflow_time = 55;		// Time in seconds
+bool program_running = false;
+
+
+/*********************************
+
+		Menu Contents
+
+**********************************/
+
+const int ITEM_COUNT = 6;
+
+Menu::element menu_items[ITEM_COUNT] {
+
+	// Name		Value			Unit	Min		Max		Increment
+	{ "1 Temp", &soak1_temp,	"C",	100,	200,	5 },
+	{ "1 Time", &soak1_time,	"s",	10,		200,	1 },
+	{ "2 Temp", &soak2_temp,	"C",	100,	200,	5 },
+	{ "2 Time", &soak2_time,	"s",	10,		200,	1 },
+	{ "3 Temp", &reflow_temp,	"C",	100,	275,	5 },
+	{ "3 Time", &reflow_time,	"s",	10,		200,	1 },
+
+};
 
 void setup()   {
+
+
+	// Setup the menu
+	menu.setContents(menu_items, ITEM_COUNT);
 
 	// Set pin modes
 	pinMode(2, INPUT);
@@ -104,20 +86,16 @@ void setup()   {
 	// Start serial connection
 	Serial.begin(9600);
 
-	// Start LCD display process and set contrast
-	display.begin();
-	display.setContrast(35);
-
-	// Show splash screen, wait, then clear screen
-	display.display();
-	delay(500);				
-	display.clearDisplay();   
-
 	// Display initial temp and time info
-	updateDisplay();
+	menu.refresh();
 
 	// Listen for start program button
 	attachInterrupt(0, inputISR, RISING);
+
+	// Show splashscreen
+	menu.display.display();
+	delay(1000);
+	menu.clear();
 
 }
 
@@ -128,22 +106,22 @@ void loop() {
 		menuUpdate();
 		debugOutput();
 	}
+
 	// Otherwise start the program
 	else {
 
-		display.clearDisplay();
-		display.setTextSize(2);
-		display.setCursor(0, 0);
-		display.print("Program");
-		display.println("Running");
-		display.display();
+		menu.clear();
+		menu.display.setTextSize(2);
+		menu.display.setCursor(0, 0);
+		menu.display.print("Program");
+		menu.display.println("Running");
+		menu.display.display();
 
 		while (program_running) {
-			programUpdate();
 			debugOutput();
 		}
 
-		updateDisplay();
+		menu.refresh();
 	}
 }
 
@@ -153,42 +131,10 @@ void menuUpdate() {
 		// Deal with joystick input
 		joystickHandler();
 		// Refresh the display with new info
-		updateDisplay();
+		menu.refresh();
 	}
 }
 
-void programUpdate() {
-	delay(10);
-	return;
-}
-
-void debugOutput() {
-
-	// If debug mode is not enabled, don't output info
-	if (!debug)
-		return;
-
-	static unsigned long time = millis();
-
-	if (millis() - time > 1000){
-		if (!program_running){
-			Serial.print("Joystick direction: ");
-			Serial.println(last_joystick_direction);
-			Serial.print("Current position: ");
-			Serial.println(cursor_position);
-			Serial.print("Position selected? ");
-			Serial.println(position_selected);
-			Serial.println("");
-			last_joystick_direction = RELEASED;
-		}
-		else {
-			Serial.println("Progam still running!");
-			Serial.println("");
-		}
-
-		time = millis();
-	}
-}
 
 /*********************************
 
@@ -230,9 +176,10 @@ void inputISR() {
 	}
 }
 
+
 /*********************************
 
-		 Menu Functions
+		 Joystick Handler
 
 **********************************/
 
@@ -241,39 +188,23 @@ void joystickHandler() {
 	switch (joystick_direction) {
 
 	case UP:
-		// Move the cursor up
-		if (!position_selected){
-			cursor_position--;
-			if (cursor_position < MIN_POSITION)
-				cursor_position = MAX_POSITION;
-		}
-		// Increase the value of the selected parameter
-		else
-			updateValues(UP);
+		menu.up();
 		break;
 
 	case DOWN:
-		// Move the cursor down
-		if (!position_selected){
-			cursor_position++;
-			if (cursor_position > MAX_POSITION)
-				cursor_position = MIN_POSITION;
-		}
-		// Decrease the value of the selected parameter
-		else
-			updateValues(DOWN);
+		menu.down();
 		break;
 
 	case LEFT:
-		position_selected = !position_selected;
+		menu.select();
 		break;
 
 	case RIGHT:
-		position_selected = !position_selected;
+		menu.select();
 		break;
 
 	case SELECT:
-		position_selected = !position_selected;
+		menu.select();
 		break;
 
 	}
@@ -282,66 +213,36 @@ void joystickHandler() {
 	joystick_direction = RELEASED;
 }
 
-void updateValues(byte p_input) {
-	int increment;
+/*********************************
 
-	if (p_input == UP)
-		increment = 1;
-	else if (p_input == DOWN)
-		increment = -1;
-	else
-		increment = 0;
+		Debug Functions
 
-	switch (cursor_position){
-	case SOAK_TEMP:
-		soak_temp += increment*5;
-		break;
-	case SOAK_TIME:
-		soak_time += increment;
-		break;
-	case REFLOW_TEMP:
-		reflow_temp += increment*5;
-		break;
-	case REFLOW_TIME:
-		reflow_time += increment;
-		break;
+**********************************/
+
+void debugOutput() {
+
+	// If debug mode is not enabled, don't output info
+	if (!debug)
+		return;
+
+	static unsigned long time = millis();
+
+	if (millis() - time > 1000){
+		if (!program_running){
+			Serial.print("Joystick direction: ");
+			Serial.println(last_joystick_direction);
+			Serial.print("Current position: ");
+			Serial.println(menu.m_cursor_pos);
+			Serial.print("Position selected? ");
+			Serial.println(menu.m_element_selected);
+			Serial.println("");
+			last_joystick_direction = RELEASED;
+		}
+		else {
+			Serial.println("Progam still running!");
+			Serial.println("");
+		}
+
+		time = millis();
 	}
-}
-
-void updateDisplay() {
-	
-	const int CURSOR_OFFSET = 2;
-
-	display.clearDisplay();
-
-	// Set system parameters first
-	display.setTextColor(BLACK);
-	display.setCursor(0, 0);
-	display.setTextSize(1);
-	display.println("Cooking Params");
-	display.print(" S Temp: ");
-	display.print(soak_temp);
-	display.println("C");
-	display.print(" S Time: ");
-	display.print(soak_time);
-	display.println("s");
-	display.print(" R Temp: ");
-	display.print(reflow_temp);
-	display.println("C");
-	display.print(" R Time: ");
-	display.print(reflow_time);
-	display.println("s");
-	
-	// Then update the cursor position	
-	if (position_selected) {
-		display.setCursor(9 * COL_WIDTH, (cursor_position + CURSOR_OFFSET) * ROW_HEIGHT);
-		display.print("=");
-	}
-	else {
-		display.setCursor(0, (cursor_position + CURSOR_OFFSET) * ROW_HEIGHT);
-		display.print("*");
-	}
-
-	// Display the updated screen
-	display.display();
 }
