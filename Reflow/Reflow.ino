@@ -9,8 +9,12 @@ details.
 
 *********************************************************************/
 
-
+#include "Arduino.h"
+#include <SPI.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_PCD8544.h>
 #include "menu.h"
+
 
 #define JOYSTICK_OUTPUTS 5
 #define JOYSTICK_START_PIN 8
@@ -56,7 +60,7 @@ bool program_running = false;
 
 const int ITEM_COUNT = 6;
 
-Menu::element menu_items[ITEM_COUNT] {
+Menu::element menu_items[ITEM_COUNT] = {
 
 	// Name		Value			Unit	Min		Max		Increment
 	{ "1 Temp", &soak1_temp,	"C",	100,	200,	5 },

@@ -1,7 +1,8 @@
+#include "Arduino.h"
+#include <SPI.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_PCD8544.h>
 #include "menu.h"
-#include "Adafruit_GFX\Adafruit_GFX.h"
-#include "Adafruit_PCD8544\Adafruit_PCD8544.h"
-
 
 /************************************************
 
@@ -9,17 +10,9 @@
 
 *************************************************/
 
-// Default constructor
-Menu::Menu() {
-	
-	// Initialize most of the class variables
-	init();
-	display.setContrast(35);
-
-}
 
 // Constuctor with optional contrast setting
-Menu::Menu(int p_contrast) {
+Menu::Menu(int p_contrast = 35) {
 
 	// Initialize most of the class variables
 	init();
@@ -38,7 +31,7 @@ void Menu::init(){
 	for (byte i = 0; i < m_VIS_COUNT; i++) {
 		m_vis_elements[i] = i;
 	}
-
+	
 	// Initialize display 	
 	display.begin();	
 }
