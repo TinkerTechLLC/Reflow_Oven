@@ -9,7 +9,7 @@ a pre-set range of values. The increment size for each menu item may
 be set to avoid excessive joystick moves to change large values.
 
 This library uses the Adafruit PCD8544 and GFX libraries to handle
-screen drawing tasts.
+screen drawing tasks.
 
 *********************************************************************/
 
@@ -43,14 +43,13 @@ public:
 	void setContents(element(*), int);	// Accepts a pointer to an array of elements
 	void setHeader(String);				// Sets the text to display at the top of the screen
 
-	void up();						// Move cursor up one menu element
-	void down();					// Move cursor down one menu element
-	void select();					// Select or deselect the current menu element
+	void up();							// Move cursor up one menu element
+	void down();						// Move cursor down one menu element
+	void select();						// Select or deselect the current menu element
 
 	void clear();						// Completely clear the screen
 	void refresh();						// Refresh the screen with updated menu info
 
-	// Initialize 
 	// Software SPI (slower updates, more flexible pin options):
 	// pin 7 - Serial clock out (SCLK)
 	// pin 6 - Serial data out (DIN)
@@ -74,7 +73,7 @@ private:
 
 	element(*m_contents);														// Pointer to the array of menu elements
 	int	m_menu_size;															// Number of items in the array of menu elements
-	static const int m_MAX_LINES = m_SCREEN_HEIGHT / m_CHAR_HEIGHT;			// Number of elements that can be simultaneously viewed on the screen
+	static const int m_MAX_LINES = m_SCREEN_HEIGHT / m_CHAR_HEIGHT;				// Number of elements that can be simultaneously viewed on the screen
 	int m_vis_elements[m_MAX_LINES];											// Array of element reference numbers that are currently visible
 	unsigned int m_vis_count;
 
