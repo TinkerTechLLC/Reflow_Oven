@@ -29,6 +29,8 @@ public:
 	Menu();								// Default constructor
 	Menu(int);							// Constructor with optional constrast setting
 
+	void begin();
+
 	struct element {					// Structure of menu elements
 		String name;
 		int *value;
@@ -66,13 +68,15 @@ private:
 	static const int m_SCREEN_WIDTH = 84;
 	static const int m_CHAR_HEIGHT = 8;
 	static const int m_CHAR_WIDTH = 6;
+	static const int m_HEADER_OFFSET = 2;
 
-	String m_header;															// Text to display at top of the window. Ignored if m_header == "NULL"
+	String m_header = "NULL";													// Text to display at top of the window. Ignored if m_header == "NULL"
 
 	element(*m_contents);														// Pointer to the array of menu elements
 	int	m_menu_size;															// Number of items in the array of menu elements
-	static const int m_VIS_COUNT = m_SCREEN_HEIGHT / m_CHAR_HEIGHT;				// Number of elements that can be simultaneously viewed on the screen
-	int m_vis_elements[m_VIS_COUNT];											// Array of element reference numbers that are currently visible
+	static const int m_MAX_LINES = m_SCREEN_HEIGHT / m_CHAR_HEIGHT;			// Number of elements that can be simultaneously viewed on the screen
+	int m_vis_elements[m_MAX_LINES];											// Array of element reference numbers that are currently visible
+	unsigned int m_vis_count;
 
 	void displayElement(int, int);												// Prints one element from the menu list at a specified location
 
