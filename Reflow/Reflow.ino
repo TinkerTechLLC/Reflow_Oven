@@ -19,9 +19,6 @@ details.
 
 #define JOYSTICK_OUTPUTS 4
 #define JOYSTICK_START_PIN 8
-
-#define LOGO16_GLCD_HEIGHT 16
-#define LOGO16_GLCD_WIDTH  16
 #define MILLIS_PER_SEC 1000
 
 
@@ -79,7 +76,7 @@ Menu::element menu_items[ITEM_COUNT] = {
 
 /********************************************
 
-	Thermocouple & PID Vars and Constants
+	Thermocouple / PID Vars and Constants
 
 *********************************************/
 

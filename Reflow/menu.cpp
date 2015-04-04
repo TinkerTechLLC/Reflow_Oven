@@ -93,7 +93,7 @@ void Menu::up(){
 		}
 	}
 
-	// If the element is selected, increase its value by the appropriate increment
+	// If the element is selected, increase its value by the appropriate increment, but not above the maximum
 	else if (m_element_selected && (*m_contents[m_cursor_pos].value + m_contents[m_cursor_pos].increment) <= m_contents[m_cursor_pos].max)
 		*m_contents[m_cursor_pos].value += m_contents[m_cursor_pos].increment;
 
@@ -127,7 +127,7 @@ void Menu::down(){
 		}
 	}
 
-	// If the element is selected, decrease its value by the appropriate increment
+	// If the element is selected, decrease its value by the appropriate increment, but not below the minimum
 	else if (m_element_selected && (*m_contents[m_cursor_pos].value - m_contents[m_cursor_pos].increment) >= m_contents[m_cursor_pos].min)
 		*m_contents[m_cursor_pos].value -= m_contents[m_cursor_pos].increment;
 
