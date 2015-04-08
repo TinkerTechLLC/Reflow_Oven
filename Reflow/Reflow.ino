@@ -17,20 +17,20 @@ details.
 #include <PID_v1.h>
 
 
-#define JOYSTICK_OUTPUTS 4
-#define JOYSTICK_START_PIN 8
+#define JOYSTICK_OUTPUTS 5
+#define JOYSTICK_START_PIN 9
 #define MILLIS_PER_SEC 1000
 
 
 /*** Joystick & Button Constants and Vars ***/
 
 #define RELEASED 0
-#define UP 8
-#define DOWN 9
-#define LEFT 10
-#define RIGHT 11
+#define UP 13
+#define DOWN 12
+#define LEFT 11
+#define RIGHT 10
 //#define SELECT 12
-#define BUTTON_PIN 13
+#define BUTTON_PIN 9
 byte joystick_direction = RELEASED;
 byte last_joystick_direction = RELEASED;
 
@@ -44,12 +44,12 @@ Menu menu;
 
 /*** Reflow Program Parameters ***/
 
-int soak1_temp = 160;		// Temp in deg C
-int soak1_time = 40;		// Time in seconds
-int soak2_temp = 160;		// Temp in deg C
-int soak2_time = 40;		// Time in seconds
-int reflow_temp = 215;		// Temp in deg C
-int reflow_time = 55;		// Time in seconds
+int soak1_temp = 25;		// Temp in deg C
+int soak1_time = 15;		// Time in seconds
+int soak2_temp = 28;		// Temp in deg C
+int soak2_time = 15;		// Time in seconds
+int reflow_temp = 32;		// Temp in deg C
+int reflow_time = 15;		// Time in seconds
 bool program_running = false;
 
 
@@ -93,7 +93,7 @@ double kd = 0.5;                // (D)erivative Tuning Parameter
 
 PID pid(&current_temp, &output, &target_temp, kp, ki, kd, DIRECT);
 
-int pid_window_size = 5000;	// PID "PWM" cycle time. PID will set a duty cycle of this time window in milliseconds.
+int pid_window_size = 2000;	// PID "PWM" cycle time. PID will set a duty cycle of this time window in milliseconds.
 unsigned long pid_window_start_time;
 
 void setup()   {
@@ -272,14 +272,42 @@ void runProgram(){
 		}
 
 		// Determine whether we're in an on or off phase of the duty cycle
+		static byte relay_state = LOW;
+
 		if (output < millis() - pid_window_start_time)
-			digitalWrite(RELAY_PIN, HIGH);
+			relay_state = HIGH;
 		else
-			digitalWrite(RELAY_PIN, LOW);
+			relay_state = LOW;
+
+		digitalWrite(RELAY_PIN, relay_state);
 
 		debugOutput();
 
 		running_time = millis() - start_time;
+
+		menu.clear();
+		menu.display.setTextSize(1);
+		menu.display.setCursor(0, 0);
+		menu.display.print("Target: ");
+		menu.display.print((int)target_temp);
+		menu.display.println("C");
+		menu.display.println("Cur Temp: ");
+		menu.display.print((int)current_temp);
+		menu.display.println("C");
+		menu.display.print((int)(current_temp * 9.0 / 5.0 + 32.0));
+		menu.display.println("F");
+		menu.display.print("Relay: ");
+		if (relay_state == HIGH)
+			menu.display.println("On");
+		else
+			menu.display.println("Off");
+		menu.display.print("Output: ");
+		menu.display.println(output);
+		menu.display.display();
+		Serial.println((float)analogRead(A0) / 1023.0 * ANALOG_REF);
+		Serial.println(current_temp);
+		Serial.println("");
+		delay(100);
 	}
 
 	// End program
@@ -298,7 +326,7 @@ void updateTemp(){
 	// of the AD8495 thermocouple amplifier converstion equation. 
 	// See https://blog.adafruit.com/2014/03/21/new-product-analog-output-k-type-thermocouple-amplifier-ad8495-breakout/
 
-	current_temp = (((float)analogRead(A0) / 1023.0) * ANALOG_REF) - 1.25 / 0.005;
+	current_temp = ((((float)analogRead(A0) / 1023.0) * ANALOG_REF) - 1.25) / 0.005;
 
 }
 
