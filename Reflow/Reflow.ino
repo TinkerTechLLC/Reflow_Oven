@@ -44,12 +44,12 @@ Menu menu;
 
 /*** Reflow Program Parameters ***/
 
-int soak1_temp = 25;		// Temp in deg C
-int soak1_time = 15;		// Time in seconds
-int soak2_temp = 28;		// Temp in deg C
-int soak2_time = 15;		// Time in seconds
-int reflow_temp = 32;		// Temp in deg C
-int reflow_time = 15;		// Time in seconds
+int soak1_temp = 25;        // Temp in deg C
+int soak1_time = 15;        // Time in seconds
+int soak2_temp = 28;        // Temp in deg C
+int soak2_time = 15;        // Time in seconds
+int reflow_temp = 32;       // Temp in deg C
+int reflow_time = 15;       // Time in seconds
 bool program_running = false;
 
 
@@ -63,13 +63,13 @@ const int ITEM_COUNT = 6;
 
 Menu::element menu_items[ITEM_COUNT] = {
 
-    // Name		Value			Unit	Min		Max		Increment
-    { "1 Temp", &soak1_temp,	"C",	100,	200,	5 },
-    { "1 Time", &soak1_time,	"s",	10,		200,	1 },
-    { "2 Temp", &soak2_temp,	"C",	100,	200,	5 },
-    { "2 Time", &soak2_time,	"s",	10,		200,	1 },
-    { "3 Temp", &reflow_temp,	"C",	100,	275,	5 },
-    { "3 Time", &reflow_time,	"s",	10,		200,	1 },
+    // Name     Value           Unit    Min     Max     Increment
+    { "1 Temp", &soak1_temp,    "C",    100,    200,    5 },
+    { "1 Time", &soak1_time,    "s",    10,     200,    1 },
+    { "2 Temp", &soak2_temp,    "C",    100,    200,    5 },
+    { "2 Time", &soak2_time,    "s",    10,     200,    1 },
+    { "3 Temp", &reflow_temp,   "C",    100,    275,    5 },
+    { "3 Time", &reflow_time,   "s",    10,     200,    1 },
 
 };
 
@@ -93,7 +93,7 @@ double kd = 0.5;                // (D)erivative Tuning Parameter
 
 PID pid(&current_temp, &output, &target_temp, kp, ki, kd, DIRECT);
 
-int pid_window_size = 2000;	// PID "PWM" cycle time. PID will set a duty cycle of this time window in milliseconds.
+int pid_window_size = 2000;     // PID "PWM" cycle time. PID will set a duty cycle of this time window in milliseconds.
 unsigned long pid_window_start_time;
 
 void setup()   {
@@ -102,11 +102,11 @@ void setup()   {
     Serial.begin(9600);
 
     // Set pin modes
-    pinMode(THERM_PIN, INPUT);																	// Set thermocouple analog input pin
-    pinMode(INTERRUPT_PIN, INPUT);																// Set common joystick / button interrupt pin
-    for (byte i = JOYSTICK_START_PIN; i < (JOYSTICK_START_PIN + JOYSTICK_OUTPUTS + 1); i++) 	// Set joystick input pins
+    pinMode(THERM_PIN, INPUT);                                                                  // Set thermocouple analog input pin
+    pinMode(INTERRUPT_PIN, INPUT);                                                              // Set common joystick / button interrupt pin
+    for (byte i = JOYSTICK_START_PIN; i < (JOYSTICK_START_PIN + JOYSTICK_OUTPUTS + 1); i++)     // Set joystick input pins
         pinMode(i, INPUT);
-    for (byte i = 3; i <= 7; i++)																// Set LCD output pins
+    for (byte i = 3; i <= 7; i++)                                                               // Set LCD output pins
         pinMode(i, OUTPUT);
 
     // Listen for joystick / button input
@@ -260,7 +260,7 @@ void runProgram(){
             target_temp = soak2_temp;
         else if (running_time > transition_2)
             target_temp = reflow_temp;
-        else if (running_time > total_run_time)					
+        else if (running_time > total_run_time)
             break;
         
         updateTemp();
@@ -311,10 +311,10 @@ void runProgram(){
     }
 
     // End program
-    target_temp = 0;				// Reset target temp
-    pid.SetMode(MANUAL);			// Turn off PID
-    digitalWrite(RELAY_PIN, LOW);	// Turn off heater
-    program_running = false;		// Turn off program running flag
+    target_temp = 0;                // Reset target temp
+    pid.SetMode(MANUAL);            // Turn off PID
+    digitalWrite(RELAY_PIN, LOW);   // Turn off heater
+    program_running = false;        // Turn off program running flag
     
     // Return to main menu
     menu.refresh();
